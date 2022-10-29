@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32922.545
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CycleTLSClient", "CycleTLSClient\CycleTLSClient.csproj", "{2E79BC0F-3077-4486-B5F2-FCCCE83D9F29}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CycleTLSClient.Tests", "CycleTLSClient.Tests\CycleTLSClient.Tests.csproj", "{0FA6484A-9468-42B9-8041-4A857B521538}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2E79BC0F-3077-4486-B5F2-FCCCE83D9F29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E79BC0F-3077-4486-B5F2-FCCCE83D9F29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E79BC0F-3077-4486-B5F2-FCCCE83D9F29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E79BC0F-3077-4486-B5F2-FCCCE83D9F29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0FA6484A-9468-42B9-8041-4A857B521538}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0FA6484A-9468-42B9-8041-4A857B521538}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0FA6484A-9468-42B9-8041-4A857B521538}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0FA6484A-9468-42B9-8041-4A857B521538}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1A7297D8-0A03-4A9D-9022-023CC3F8059C}
+	EndGlobalSection
+EndGlobal
