@@ -15,36 +15,17 @@ namespace CycleTLS
         /// </summary>
         public static CycleTLSClient Initialize()
         {
-            string executableFilename;
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            string executableFilename = "";
+            try
             {
-                executableFilename = "index.exe";
+                executableFilename = GetExecutableFilename();
             }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                if (RuntimeInformation.OSArchitecture == Architecture.Arm)
-                {
-                    executableFilename = "index-arm";
-                }
-                else if (RuntimeInformation.OSArchitecture == Architecture.Arm64)
-                {
-                    executableFilename = "index-arm64";
-                }
-                else
-                {
-                    executableFilename = "index";
-                }
-
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                executableFilename = "index-mac";
-            }
-            else
+            catch (PlatformNotSupportedException)
             {
                 CleanExit("Operating system not supported");
+                throw;
             }
+            
             //handleSpawn(debug, executableFilename, port);
 
             //this.createClient(port, debug);
@@ -55,6 +36,32 @@ namespace CycleTLS
         public static void CleanExit(string error)
         {
 
+        }
+
+        private static string GetExecutableFilename()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return "index.exe";
+            }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                if (RuntimeInformation.OSArchitecture == Architecture.Arm)
+                {
+                    return "index-arm";
+                }
+                if (RuntimeInformation.OSArchitecture == Architecture.Arm64)
+                {
+                    return "index-arm64";
+                }
+                return "index";
+
+            }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return "index-mac";
+            }
+            throw new PlatformNotSupportedException();
         }
     }
 
