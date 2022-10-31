@@ -13,14 +13,20 @@ namespace CycleTLS
     {
         private readonly ILogger<CycleTLSServer> _logger;
 
+        private Process GoServer { get; set; } = null;
+
         public CycleTLSServer()
         {
             var factory = LoggerFactory.Create(b => b.AddConsole());
             var logger = factory.CreateLogger<CycleTLSServer>();
         }
 
-        public CycleTLSServer(ILogger<CycleTLSServer> logger) =>
+        public CycleTLSServer(ILogger<CycleTLSServer> logger)
+        {
             _logger = logger;
+
+
+        }
 
         /// <summary>
         /// Creates and runs CycleTLS server
@@ -34,63 +40,46 @@ namespace CycleTLS
             }
             catch (PlatformNotSupportedException)
             {
-                CleanExit("Operating system not supported");
+                _logger.LogError("Operating system not supported");
                 throw;
             }
 
-            // Set CleanExit on SIGINT
-            var sigintReceived = false;
-            Console.CancelKeyPress += (_, ea) =>
-            {
-                // Tell .NET to not terminate the process
-                ea.Cancel = true;
-
-                CleanExit();
-                sigintReceived = true;
-            };
-            // Set CleanExit on SIGTERM
-            AppDomain.CurrentDomain.ProcessExit += (_, ea) =>
-            {
-                if (!sigintReceived)
-                {
-                    CleanExit();
-                }
-            };
-
-            //handleSpawn(debug, executableFilename, port);
+            //HandleSpawn(debug, executableFilename, port);
 
             //this.createClient(port, debug);
 
             throw new NotImplementedException();
         }
 
-        public void CleanExit(string message = "", bool exit = true)
+        public void HandleSpawn(bool debug, string filename, int port)
         {
-            if (string.IsNullOrEmpty(message))
-                _logger.LogError(message);
-
-            //if (process.platform == "win32") {
-            //  if(child) {
-            //    new Promise((resolve, reject) => {
-            //      exec(
-            //          "taskkill /pid " + child.pid + " /T /F",
-            //          (error: any, stdout: any, stderr: any) => {
-            //            if (error) {
-            //              console.warn(error);
-            //            }
-            //            if (exit) process.exit();
-            //          }
-            //      );
-            //    });
-            //  }
-            //} else {
-            //  if(child) {
-            //    //linux/darwin os
-            //    new Promise((resolve, reject) => {
-            //      process.kill(-child.pid);
-            //      if (exit) process.exit();
-            //    });
-            //  }
+            // TODO: solve problem with directories
+            var pi = new ProcessStartInfo(filename);
+            pi.EnvironmentVariables.Add("WS_PORT", port.ToString());
+            pi.UseShellExecute = true;
+            pi.WindowStyle = ProcessWindowStyle.Hidden;
+            
+            var child = new Process();
+            child.StartInfo = pi;
+            child.ErrorDataReceived += async (_, ea) =>
+            {
+                if (ea.Data.Contains("Request_Id_On_The_Left"))
+                {
+                    var splitRequestIdAndError = ea.Data.Split(new string[] { "Request_Id_On_The_Left" }, StringSplitOptions.None);
+                    var requestId = splitRequestIdAndError[0];
+                    var error = splitRequestIdAndError[1];
+                    //_logger.LogError($"Error from CycleTLSServer: requestId:{requestId} error:{error}");
+                }
+                else
+                {
+                    // TODO: check source js code here
+                    _logger.LogError($"Error from CycleTLSServer (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
+                        $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
+                    // TODO: check that this will work
+                    child.Kill();
+                    HandleSpawn(debug, filename, port);
+                }
+            };
         }
 
         private static string GetExecutableFilename()
