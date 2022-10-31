@@ -9,9 +9,10 @@ namespace CycleTLS.Tests
             client.DefaultRequestOptions.Ja3 = "";
             client.DefaultRequestOptions.UserAgent = "";
 
+            CycleTLSResponse response = null;
             try
 			{
-				CycleTLSResponse response = await client.SendAsync(HttpMethod.Get, "");
+				response = await client.SendAsync(HttpMethod.Get, "");
 			}
 			catch (Exception e)
 			{
