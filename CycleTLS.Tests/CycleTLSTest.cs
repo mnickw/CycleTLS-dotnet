@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace CycleTLS.Tests
 {
     public class CycleTLSTest
@@ -5,7 +7,9 @@ namespace CycleTLS.Tests
         [Fact]
         public async Task Test1()
         {
-			CycleTLSClient client = new CycleTLSServer().Initialize();
+            var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<CycleTLSClient>();
+            CycleTLSClient client = new CycleTLSClient(logger);
+            client.InitializeServer();
             client.DefaultRequestOptions.Ja3 = "";
             client.DefaultRequestOptions.UserAgent = "";
 

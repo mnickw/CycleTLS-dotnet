@@ -4,34 +4,61 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using static System.Net.WebRequestMethods;
 
 namespace CycleTLS
 {
-    public class CycleTLSServer
+    public class CycleTLSClient
     {
-        private readonly ILogger<CycleTLSServer> _logger;
+        private readonly ILogger<CycleTLSClient> _logger;
 
         private Process GoServer { get; set; } = null;
 
-        public CycleTLSServer()
+        public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
         {
-            var factory = LoggerFactory.Create(b => b.AddConsole());
-            var logger = factory.CreateLogger<CycleTLSServer>();
-        }
 
-        public CycleTLSServer(ILogger<CycleTLSServer> logger)
+        };
+
+        public CycleTLSClient(ILogger<CycleTLSClient> logger)
         {
             _logger = logger;
-
-
         }
 
         /// <summary>
-        /// Creates and runs CycleTLS server
+        /// Creates and runs server with source CycleTLS library
         /// </summary>
-        public CycleTLSClient Initialize()
+        /// <param name="port"></param>
+        /// <param name="debug"></param>
+        public void InitializeServer(int port = 9119, bool debug = false)
+        {
+            if (IsPortAvailable(port))
+            {
+                SpawnServer(port, debug);
+                return;
+            }
+
+            //CreateClient(port, debug);
+        }
+
+        private bool IsPortAvailable(int port)
+        {
+            IPAddress ipAddress = Dns.GetHostEntry("localhost").AddressList[0];
+            try
+            {
+                TcpListener tcpListener = new TcpListener(ipAddress, port);
+                tcpListener.Start();
+            }
+            catch (SocketException ex)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private void SpawnServer(int port, bool debug)
         {
             string executableFilename = "";
             try
@@ -44,42 +71,9 @@ namespace CycleTLS
                 throw;
             }
 
-            //HandleSpawn(debug, executableFilename, port);
+            HandleSpawn(debug, executableFilename, port);
 
-            //this.createClient(port, debug);
-
-            throw new NotImplementedException();
-        }
-
-        public void HandleSpawn(bool debug, string filename, int port)
-        {
-            // TODO: solve problem with directories
-            var pi = new ProcessStartInfo(filename);
-            pi.EnvironmentVariables.Add("WS_PORT", port.ToString());
-            pi.UseShellExecute = true;
-            pi.WindowStyle = ProcessWindowStyle.Hidden;
-            
-            var child = new Process();
-            child.StartInfo = pi;
-            child.ErrorDataReceived += async (_, ea) =>
-            {
-                if (ea.Data.Contains("Request_Id_On_The_Left"))
-                {
-                    var splitRequestIdAndError = ea.Data.Split(new string[] { "Request_Id_On_The_Left" }, StringSplitOptions.None);
-                    var requestId = splitRequestIdAndError[0];
-                    var error = splitRequestIdAndError[1];
-                    //_logger.LogError($"Error from CycleTLSServer: requestId:{requestId} error:{error}");
-                }
-                else
-                {
-                    // TODO: check source js code here
-                    _logger.LogError($"Error from CycleTLSServer (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
-                        $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
-                    // TODO: check that this will work
-                    child.Kill();
-                    HandleSpawn(debug, filename, port);
-                }
-            };
+            //CreateClient(port, debug);
         }
 
         private static string GetExecutableFilename()
@@ -107,14 +101,38 @@ namespace CycleTLS
             }
             throw new PlatformNotSupportedException();
         }
-    }
 
-    public class CycleTLSClient
-    {
-        public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
+        private void HandleSpawn(bool debug, string filename, int port)
         {
+            // TODO: solve problem with directories
+            var pi = new ProcessStartInfo(filename);
+            pi.EnvironmentVariables.Add("WS_PORT", port.ToString());
+            pi.UseShellExecute = true;
+            pi.WindowStyle = ProcessWindowStyle.Hidden;
 
-        };
+            var child = new Process();
+            child.StartInfo = pi;
+            child.ErrorDataReceived += async (_, ea) =>
+            {
+                if (ea.Data.Contains("Request_Id_On_The_Left"))
+                {
+                    var splitRequestIdAndError = ea.Data.Split(new string[] { "Request_Id_On_The_Left" }, StringSplitOptions.None);
+                    var requestId = splitRequestIdAndError[0];
+                    var error = splitRequestIdAndError[1];
+                    // TODO: check source js code here
+                    //_logger.LogError($"Error from CycleTLSClient: requestId:{requestId} error:{error}");
+                }
+                else
+                {
+                    // TODO: check source js code here
+                    _logger.LogError($"Error from CycleTLSClient (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
+                        $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
+                    // TODO: check that this will work
+                    child.Kill();
+                    HandleSpawn(debug, filename, port);
+                }
+            };
+        }
 
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url)
         {
