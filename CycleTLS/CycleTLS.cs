@@ -1,6 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace CycleTLS
@@ -12,7 +15,46 @@ namespace CycleTLS
         /// </summary>
         public static CycleTLSClient Initialize()
         {
-            return new CycleTLSClient();
+            string executableFilename;
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                executableFilename = "index.exe";
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                if (RuntimeInformation.OSArchitecture == Architecture.Arm)
+                {
+                    executableFilename = "index-arm";
+                }
+                else if (RuntimeInformation.OSArchitecture == Architecture.Arm64)
+                {
+                    executableFilename = "index-arm64";
+                }
+                else
+                {
+                    executableFilename = "index";
+                }
+
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                executableFilename = "index-mac";
+            }
+            else
+            {
+                CleanExit("Operating system not supported");
+            }
+            //handleSpawn(debug, executableFilename, port);
+
+            //this.createClient(port, debug);
+
+            throw new NotImplementedException();
+        }
+
+        public static void CleanExit(string error)
+        {
+
         }
     }
 
@@ -25,12 +67,12 @@ namespace CycleTLS
 
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url)
         {
-
+            throw new NotImplementedException();
         }
 
         public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
         {
-
+            throw new NotImplementedException();
         }
     }
 
