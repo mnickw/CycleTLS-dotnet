@@ -5,7 +5,7 @@ namespace CycleTLS.Tests
         [Fact]
         public async Task Test1()
         {
-			CycleTLSClient client = CycleTLSServer.Initialize();
+			CycleTLSClient client = new CycleTLSServer().Initialize();
             client.DefaultRequestOptions.Ja3 = "";
             client.DefaultRequestOptions.UserAgent = "";
 

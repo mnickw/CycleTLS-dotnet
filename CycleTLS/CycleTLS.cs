@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -10,10 +11,21 @@ namespace CycleTLS
 {
     public class CycleTLSServer
     {
+        private readonly ILogger<CycleTLSServer> _logger;
+
+        public CycleTLSServer()
+        {
+            var factory = LoggerFactory.Create(b => b.AddConsole());
+            var logger = factory.CreateLogger<CycleTLSServer>();
+        }
+
+        public CycleTLSServer(ILogger<CycleTLSServer> logger) =>
+            _logger = logger;
+
         /// <summary>
         /// Creates and runs CycleTLS server
         /// </summary>
-        public static CycleTLSClient Initialize()
+        public CycleTLSClient Initialize()
         {
             string executableFilename = "";
             try
@@ -25,7 +37,26 @@ namespace CycleTLS
                 CleanExit("Operating system not supported");
                 throw;
             }
-            
+
+            // Set CleanExit on SIGINT
+            var sigintReceived = false;
+            Console.CancelKeyPress += (_, ea) =>
+            {
+                // Tell .NET to not terminate the process
+                ea.Cancel = true;
+
+                CleanExit();
+                sigintReceived = true;
+            };
+            // Set CleanExit on SIGTERM
+            AppDomain.CurrentDomain.ProcessExit += (_, ea) =>
+            {
+                if (!sigintReceived)
+                {
+                    CleanExit();
+                }
+            };
+
             //handleSpawn(debug, executableFilename, port);
 
             //this.createClient(port, debug);
@@ -33,9 +64,33 @@ namespace CycleTLS
             throw new NotImplementedException();
         }
 
-        public static void CleanExit(string error)
+        public void CleanExit(string message = "", bool exit = true)
         {
+            if (string.IsNullOrEmpty(message))
+                _logger.LogError(message);
 
+            //if (process.platform == "win32") {
+            //  if(child) {
+            //    new Promise((resolve, reject) => {
+            //      exec(
+            //          "taskkill /pid " + child.pid + " /T /F",
+            //          (error: any, stdout: any, stderr: any) => {
+            //            if (error) {
+            //              console.warn(error);
+            //            }
+            //            if (exit) process.exit();
+            //          }
+            //      );
+            //    });
+            //  }
+            //} else {
+            //  if(child) {
+            //    //linux/darwin os
+            //    new Promise((resolve, reject) => {
+            //      process.kill(-child.pid);
+            //      if (exit) process.exit();
+            //    });
+            //  }
         }
 
         private static string GetExecutableFilename()
