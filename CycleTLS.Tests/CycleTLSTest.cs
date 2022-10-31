@@ -6,12 +6,12 @@ namespace CycleTLS.Tests
         public async Task Test1()
         {
 			CycleTLSClient client = CycleTLSServer.Initialize();
-			CycleTLSClient.DefaultRequestOptions.Ja3 = "";
-            CycleTLSClient.DefaultRequestOptions.UserAgent = "";
+            client.DefaultRequestOptions.Ja3 = "";
+            client.DefaultRequestOptions.UserAgent = "";
 
             try
 			{
-				CycleTLSResponse response = await CycleTLSClient.SendAsync(HttpMethod.Get, "");
+				CycleTLSResponse response = await client.SendAsync(HttpMethod.Get, "");
 			}
 			catch (Exception e)
 			{
