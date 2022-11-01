@@ -7,14 +7,19 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using WebSocketSharp;
 using static System.Net.WebRequestMethods;
 
 namespace CycleTLS
 {
+    // TODO: ConfigureAwait
+    // TODO: Ask why websockets, not just usual http
     public class CycleTLSClient
     {
         private readonly ILogger<CycleTLSClient> _logger;
 
+        // TODO: Dispose
+        private WebSocket WebSocketClient { get; set; } = null;
         private Process GoServer { get; set; } = null;
 
         public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
@@ -40,7 +45,7 @@ namespace CycleTLS
                 return;
             }
 
-            //CreateClient(port, debug);
+            CreateClient(port, debug);
         }
 
         private bool IsPortAvailable(int port)
@@ -51,7 +56,7 @@ namespace CycleTLS
                 TcpListener tcpListener = new TcpListener(ipAddress, port);
                 tcpListener.Start();
             }
-            catch (SocketException ex)
+            catch
             {
                 return false;
             }
@@ -73,7 +78,7 @@ namespace CycleTLS
 
             HandleSpawn(debug, executableFilename, port);
 
-            //CreateClient(port, debug);
+            CreateClient(port, debug);
         }
 
         private static string GetExecutableFilename()
@@ -134,11 +139,51 @@ namespace CycleTLS
             };
         }
 
+        private void CreateClient(int port, bool debug)
+        {
+            var ws = new WebSocket("ws://localhost:" + port);
+
+            ws.OnOpen += (_, ea) =>
+            {
+                WebSocketClient = ws;
+            };
+
+            ws.OnMessage += (_, ea) =>
+            {
+                var message = ea.Data;
+                //parse json
+                //add response to parallelDictionary requestId -> response
+            };
+
+            ws.OnError += (_, ea) =>
+            {
+                // TODO: check if no deadlock here
+                // TODO: Dispose
+                ws.Close();
+                Task.Delay(100).ContinueWith((t) => CreateClient(port, debug));
+            };
+
+            ws.Connect();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="httpMethod"></param>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url)
         {
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="cycleTLSRequestOptions"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
         {
             throw new NotImplementedException();
