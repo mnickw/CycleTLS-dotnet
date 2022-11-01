@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -9,6 +10,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using WebSocketSharp;
 using static System.Net.WebRequestMethods;
@@ -21,9 +23,22 @@ namespace CycleTLS
     {
         private readonly ILogger<CycleTLSClient> _logger;
 
+        public TimeSpan DefaultTimeOut { get; private set; }
+
         // TODO: Dispose
         private WebSocket WebSocketClient { get; set; } = null;
         private Process GoServer { get; set; } = null;
+
+        // TODO: explain in comments why do we need queue and dictionary
+        private object _lockQueue = new object();
+
+        private bool isQueueSendRunning = false;
+
+        private Queue<(CycleTLSRequestOptions RequestOptions, TaskCompletionSource<CycleTLSResponse> RequestTCS)> RequstQueue { get; set; }
+            = new Queue<(CycleTLSRequestOptions RequestOptions, TaskCompletionSource<CycleTLSResponse> RequestTCS)>();
+
+        private ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>> SentRequests { get; set; }
+            = new ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>>();
 
         public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
         {
@@ -129,7 +144,7 @@ namespace CycleTLS
                 else
                 {
                     // TODO: check source js code here
-                    _logger.LogError($"Error from CycleTLSClient (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
+                    _logger.LogError($"Go server received error data (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
                         $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
                     // TODO: check that this will work
                     GoServer.Kill();
@@ -144,9 +159,26 @@ namespace CycleTLS
         {
             var ws = new WebSocket("ws://localhost:" + port);
 
+            ws.OnMessage += (_, ea) =>
+            {
+                CycleTLSResponse response = JsonSerializer.Deserialize<CycleTLSResponse>(ea.Data);
+                if (SentRequests.TryRemove(response.RequestID, out var requestTCS))
+                {
+                    requestTCS.TrySetResult(response);
+                }
+            };
+
             ws.OnError += (_, ea) =>
             {
                 ws.Close();
+
+                foreach (var requestPair in SentRequests)
+                {
+                    requestPair.Value.TrySetException(ea.Exception);
+                }
+
+                SentRequests.Clear();
+
                 Task.Delay(100).ContinueWith((t) => StartClient(port, debug));
             };
 
@@ -164,7 +196,35 @@ namespace CycleTLS
         /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url)
         {
-            throw new NotImplementedException();
+            return await SendAsync(httpMethod, url, DefaultTimeOut);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="httpMethod"></param>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url, TimeSpan timeout)
+        {
+            return await SendAsync(new CycleTLSRequestOptions()
+            {
+                URL = url,
+                Method = httpMethod.Method
+            }, timeout);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="httpMethod"></param>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
+        {
+            return await SendAsync(cycleTLSRequestOptions, DefaultTimeOut);
         }
 
         /// <summary>
@@ -173,14 +233,9 @@ namespace CycleTLS
         /// <param name="cycleTLSRequestOptions"></param>
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
+        public Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions, TimeSpan timeout)
         {
             // TODO: Simple cookies
-
-            if (GoServer == null)
-            {
-                throw new InvalidOperationException("Server with source CycleTLS library is not initialized");
-            }
 
             if (WebSocketClient == null)
             {
@@ -194,60 +249,53 @@ namespace CycleTLS
                 Options = cycleTLSRequestOptions
             });
 
-    //        lastRequestID = requestId
+            TaskCompletionSource<CycleTLSResponse> tcs = new TaskCompletionSource<CycleTLSResponse>();
+            var cancelSource = new CancellationTokenSource(timeout);
+            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"After {timeout.Seconds} seconds - no response")));
 
-    //if (this.server)
-    //        {
-    //            this.server.send(JSON.stringify({ requestId, options }));
-    //        }
-    //        else
-    //        {
-    //            if (this.queue == null)
-    //            {
-    //                this.queue = [];
-    //            }
-    //            this.queue.push(JSON.stringify({ requestId, options }))
+            lock (_lockQueue)
+            {
+                RequstQueue.Enqueue((cycleTLSRequestOptions, tcs));
+                if (!isQueueSendRunning)
+                {
+                    isQueueSendRunning = true;
+                    QueueSendAsync();
+                }
+            }
 
-    //  if (this.queueId == null)
-    //            {
-    //                this.queueId = setInterval(() => {
-    //                    if (this.server)
-    //                    {
-    //                        for (let request of this.queue)
-    //                        {
-    //                            this.server.send(request);
-    //                        }
-    //                        this.queue = [];
-    //                        clearInterval(this.queueId);
-    //                        this.queueId = null
-    //                    }
-    //                }, 100)
-    //  }
-    //        }
-
-            //instance.once(requestId, (response) => {
-            //if (response.error) return rejectRequest(response.error);
-            //try
+            return tcs.Task;
+        }
+    
+        private async Task QueueSendAsync()
+        {
+            //if (WebSocketClient == null)
             //{
-            //    //parse json responses
-            //    response.Body = JSON.parse(response.Body);
-            //    //override console.log full repl to display full body
-            //    response.Body[util.inspect.custom] = function(){ return JSON.stringify(this, undefined, 2); }
+            //    throw new InvalidOperationException("For some reason WebSocket client is not initialized. You should not see this exception");
             //}
-            //catch (e) { }
 
-            //const { Status: status, Body: body, Headers: headers } = response;
+            //// Wait max 1500 milliseconds while server or client restarts
+            //int attempts = 0;
+            //while (!WebSocketClient.IsAlive && attempts < 15)
+            //{
+            //    await Task.Delay(100);
+            //    attempts++;
+            //}
 
-            //if (headers["Set-Cookie"])
-            //    headers["Set-Cookie"] = headers["Set-Cookie"].split("/,/");
-            //resolveRequest({
-            //    status,
-            //    body,
-            //    headers,
-            //  });
-            //});
+            //if (!WebSocketClient.IsAlive)
+            //{
+            //    // return error
+            //}
 
-            throw new NotImplementedException();
+            //string requestJson;
+            //TaskCompletionSource<CycleTLSResponse> requestTcs;
+            //lock (_lockQueue)
+            //{
+            //    (requestJson, requestTcs) = RequstQueue.Dequeue();
+            //}
+
+            //ConcurrentQueue<string> q = new ConcurrentQueue<string>();
+            //q.
+            //WebSocketClient.SendAsync(requestJson, (isResponded))
         }
     }
 

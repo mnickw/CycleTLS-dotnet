@@ -8,8 +8,11 @@ namespace CycleTLS.Tests
         public async Task Test1()
         {
             var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<CycleTLSClient>();
+
             CycleTLSClient client = new CycleTLSClient(logger);
+
             client.InitializeServerAndClient();
+
             client.DefaultRequestOptions.Ja3 = "";
             client.DefaultRequestOptions.UserAgent = "";
 
