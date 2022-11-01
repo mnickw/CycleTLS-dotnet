@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,15 +8,23 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using WebSocketSharp;
-using static System.Net.WebRequestMethods;
 
 namespace CycleTLS
 {
+    // TODO: Code SendAsync
+    // TODO: Code QueueSendAsync
+    // TODO: Check json parsing
+    // TODO: Solve StartServer problems
+    // TODO: Dispose
     // TODO: logs
+    // TODO: Debug StartServer, StartClient and everything else
+
+    // TODO: Documentation
+    // TODO: explain in comments why do we need queue and dictionary
+    // TODO: Simple cookies and headers
     // TODO: Ask why websockets, not just usual http
     public class CycleTLSClient
     {
@@ -25,11 +32,11 @@ namespace CycleTLS
 
         public TimeSpan DefaultTimeOut { get; private set; }
 
-        // TODO: Dispose
+
         private WebSocket WebSocketClient { get; set; } = null;
         private Process GoServer { get; set; } = null;
 
-        // TODO: explain in comments why do we need queue and dictionary
+
         private object _lockQueue = new object();
 
         private bool isQueueSendRunning = false;
@@ -123,7 +130,7 @@ namespace CycleTLS
 
         private void StartServer(bool debug, string filename, int port)
         {
-            // TODO: solve problem with directories
+            // TODO:StartServer: solve problem with directories
             var pi = new ProcessStartInfo(filename);
             pi.EnvironmentVariables.Add("WS_PORT", port.ToString());
             pi.UseShellExecute = true;
@@ -138,17 +145,17 @@ namespace CycleTLS
                     var splitRequestIdAndError = ea.Data.Split(new string[] { "Request_Id_On_The_Left" }, StringSplitOptions.None);
                     var requestId = splitRequestIdAndError[0];
                     var error = splitRequestIdAndError[1];
-                    // TODO: check source js code here
+                    // TODO:StartServer: check source js code here
                     //_logger.LogError($"Error from CycleTLSClient: requestId:{requestId} error:{error}");
                 }
                 else
                 {
-                    // TODO: check source js code here
+                    // TODO:StartServer: check source js code here
                     _logger.LogError($"Go server received error data (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
                         $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
-                    // TODO: check that this will work
+                    // TODO:StartServer: check that this will work
                     GoServer.Kill();
-                    // TODO: Dispose
+                    // TODO:StartServer: Dispose?
                     StartServer(debug, filename, port);
                 }
             };
@@ -170,7 +177,7 @@ namespace CycleTLS
 
             ws.OnError += (_, ea) =>
             {
-                ws.Close();
+                ws.Close(); // TODO:StartClient: Debug here for no errors
 
                 foreach (var requestPair in SentRequests)
                 {
@@ -235,17 +242,15 @@ namespace CycleTLS
         /// <exception cref="NotImplementedException"></exception>
         public Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions, TimeSpan timeout)
         {
-            // TODO: Simple cookies
-
             if (WebSocketClient == null)
             {
                 throw new InvalidOperationException("WebSocket client is not initialized");
             }
 
-            // options + DefaultOptions
+            // TODO:SendAsync: options + DefaultOptions
             var jsonRequestData = JsonSerializer.Serialize(new CycleTLSRequest()
             {
-                RequestId = "", // generate requestId
+                RequestId = "", // TODO:SendAsync: generate requestId
                 Options = cycleTLSRequestOptions
             });
 
@@ -326,6 +331,6 @@ namespace CycleTLS
         public string Timeout { get; set; } = ""; //`json:"timeout"`
         public string DisableRedirect { get; set; } = ""; //`json:"disableRedirect"`
         public List<string> HeaderOrder { get; set; } = new List<string>(); //`json:"headerOrder"`
-	    public string OrderAsProvided { get; set; } = ""; //`json:"orderAsProvided"` //TODO
+	    public string OrderAsProvided { get; set; } = ""; //`json:"orderAsProvided"`
     }
 }
