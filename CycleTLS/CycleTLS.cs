@@ -24,7 +24,8 @@ namespace CycleTLS
 
         public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
         {
-
+            Ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0",
+            UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36"
         };
 
         public CycleTLSClient(ILogger<CycleTLSClient> logger)
@@ -186,6 +187,8 @@ namespace CycleTLS
         /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
         {
+            // TODO: Simple cookies
+
             throw new NotImplementedException();
         }
     }
@@ -206,17 +209,17 @@ namespace CycleTLS
 
     public class CycleTLSRequestOptions
     {
-        public string URL { get; set; } //`json:"url"`
-	    public string Method { get; set; } //`json:"method"`
-	    public Dictionary<string,string> Headers { get; set; } //`json:"headers"`
-	    public string Body { get; set; } //`json:"body"`
-	    public string Ja3 { get; set; } //`json:"ja3"`
-	    public string UserAgent { get; set; } //`json:"userAgent"`
-	    public string Proxy { get; set; } //`json:"proxy"`
-	    public Cookie[] Cookies { get; set; } //`json:"cookies"`
-	    public string Timeout { get; set; } //`json:"timeout"`
-	    public string DisableRedirect { get; set; } //`json:"disableRedirect"`
-	    public string[] HeaderOrder { get; set; } //`json:"headerOrder"`
-	    public string OrderAsProvided { get; set; } //`json:"orderAsProvided"` //TODO
+        public string URL { get; set; } = ""; //`json:"url"`
+	    public string Method { get; set; } = ""; //`json:"method"`
+        public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>(); //`json:"headers"`
+	    public string Body { get; set; } = ""; //`json:"body"`
+        public string Ja3 { get; set; } = ""; //`json:"ja3"`
+        public string UserAgent { get; set; } = "";  //`json:"userAgent"`
+	    public string Proxy { get; set; } = "";  //`json:"proxy"`
+        public List<Cookie> Cookies { get; set; } = new List<Cookie>(); //`json:"cookies"`
+        public string Timeout { get; set; } = ""; //`json:"timeout"`
+        public string DisableRedirect { get; set; } = ""; //`json:"disableRedirect"`
+        public List<string> HeaderOrder { get; set; } = new List<string>(); //`json:"headerOrder"`
+	    public string OrderAsProvided { get; set; } = ""; //`json:"orderAsProvided"` //TODO
     }
 }
