@@ -15,8 +15,6 @@ using WebSocketSharp;
 
 namespace CycleTLS
 {
-    // TODO: Code QueueSendAsync
-    // TODO: Check json parsing
     // TODO: Solve StartServer problems
     // TODO: Dispose
     // TODO: logs
@@ -40,8 +38,8 @@ namespace CycleTLS
 
         private bool isQueueSendRunning = false;
 
-        private Queue<(CycleTLSRequestOptions RequestOptions, TaskCompletionSource<CycleTLSResponse> RequestTCS)> RequstQueue { get; set; }
-            = new Queue<(CycleTLSRequestOptions RequestOptions, TaskCompletionSource<CycleTLSResponse> RequestTCS)>();
+        private Queue<(CycleTLSRequest Request, TaskCompletionSource<CycleTLSResponse> RequestTCS)> RequstQueue { get; set; }
+            = new Queue<(CycleTLSRequest Request, TaskCompletionSource<CycleTLSResponse> RequestTCS)>();
 
         private ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>> SentRequests { get; set; }
             = new ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>>();
@@ -63,7 +61,7 @@ namespace CycleTLS
             OrderAsProvided = "",
             Proxy = "",
             Timeout = "",
-            URL = ""
+            Url = ""
         };
 
         public CycleTLSClient(ILogger<CycleTLSClient> logger)
@@ -228,7 +226,7 @@ namespace CycleTLS
         {
             return await SendAsync(new CycleTLSRequestOptions()
             {
-                URL = url,
+                Url = url,
                 Method = httpMethod.Method
             }, timeout);
         }
@@ -256,7 +254,28 @@ namespace CycleTLS
                 throw new InvalidOperationException("WebSocket client is not initialized.");
             }
 
-            // There's no records in netstandard2.0, so here's immutable copy of options
+            TaskCompletionSource<CycleTLSResponse> tcs = new TaskCompletionSource<CycleTLSResponse>();
+            var cancelSource = new CancellationTokenSource(timeout);
+            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"No response after {timeout.Seconds} seconds.")));
+
+            var request = CreateRequest(cycleTLSRequestOptions);
+
+            lock (_lockQueue)
+            {
+                RequstQueue.Enqueue((request, tcs));
+                if (!isQueueSendRunning)
+                {
+                    isQueueSendRunning = true;
+                    QueueSendAsync();
+                }
+            }
+
+            return tcs.Task;
+        }
+        
+        private CycleTLSRequest CreateRequest(CycleTLSRequestOptions cycleTLSRequestOptions)
+        {
+            // There's no records in netstandard2.0, so here's copy of options
             var optionsCopy = new CycleTLSRequestOptions();
             foreach (var propertyInfo in typeof(CycleTLSRequestOptions).GetProperties())
             {
@@ -269,39 +288,60 @@ namespace CycleTLS
             }
 
             int requestIndex;
-            lock(_lockRequestCount)
+            lock (_lockRequestCount)
                 requestIndex = ++RequestCount;
 
-            var jsonRequestData = JsonSerializer.Serialize(new CycleTLSRequest()
+            var request = new CycleTLSRequest()
             {
-                RequestId = $"{requestIndex}:{DateTime.Now}:{cycleTLSRequestOptions.URL}",
-                Options = cycleTLSRequestOptions
-            });
+                RequestId = $"{requestIndex}:{DateTime.Now}:{optionsCopy.Url}",
+                Options = optionsCopy
+            };
 
-            TaskCompletionSource<CycleTLSResponse> tcs = new TaskCompletionSource<CycleTLSResponse>();
-            var cancelSource = new CancellationTokenSource(timeout);
-            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"No response after {timeout.Seconds} seconds.")));
-
-            lock (_lockQueue)
-            {
-                RequstQueue.Enqueue((cycleTLSRequestOptions, tcs));
-                if (!isQueueSendRunning)
-                {
-                    isQueueSendRunning = true;
-                    QueueSendAsync();
-                }
-            }
-
-            return tcs.Task;
+            return request;
         }
-    
+
         private async Task QueueSendAsync()
         {
-            if (WebSocketClient == null)
+            while (true)
             {
-                throw new InvalidOperationException("For some reason WebSocket client is not initialized. You should not see this exception");
-            }
+                if (WebSocketClient == null)
+                {
+                    throw new InvalidOperationException("Critical error. For some reason WebSocket client is not initialized. " +
+                        "Probably, you should not see this exception");
+                }
 
+                if (!(await ClientRestartCheckDelay())) return;
+
+                CycleTLSRequest request;
+                TaskCompletionSource<CycleTLSResponse> requestTCS;
+                lock (_lockQueue)
+                {
+                    if (!RequstQueue.Any())
+                    {
+                        isQueueSendRunning = false;
+                        return;
+                    }
+                    (request, requestTCS) = RequstQueue.Dequeue();
+                }
+
+                SentRequests.TryAdd(request.RequestId, requestTCS);
+
+                var jsonRequestData = JsonSerializer.Serialize(request);
+
+                WebSocketClient.SendAsync(jsonRequestData, (isCompleted) =>
+                {
+                    if (!isCompleted)
+                    {
+                        requestTCS.TrySetException(new Exception("Error in WebSocket connection."));
+                        SentRequests.TryRemove(request.RequestId, out _);
+                    }
+                });
+            }
+        }
+
+        // Returns true if restart was successful and WebSocketClient is alive now, false otherwise
+        private async Task<bool> ClientRestartCheckDelay()
+        {
             // Wait max 5000 milliseconds while server or client restarts
             int attempts = 0;
             int maxAttempts = 50;
@@ -319,14 +359,14 @@ namespace CycleTLS
                     while (RequstQueue.Any())
                     {
                         RequstQueue.Dequeue().RequestTCS
-                            .TrySetException(new Exception($"WebSocket connection was not established after {maxAttempts * delay} milliseconds."));
+                            .TrySetException(new Exception($"Critical error. " +
+                                $"WebSocket connection was not established after {maxAttempts * delay} milliseconds."));
                     }
                     isQueueSendRunning = false;
-                    return;
+                    return false;
                 }
             }
-
-            // todo
+            return true;
         }
     }
 
@@ -346,17 +386,17 @@ namespace CycleTLS
 
     public class CycleTLSRequestOptions
     {
-        public string URL { get; set; } = null; //`json:"url"`
-	    public string Method { get; set; } = null; //`json:"method"`
-        public Dictionary<string, string> Headers { get; set; } = null; //`json:"headers"`
-	    public string Body { get; set; } = null; //`json:"body"`
-        public string Ja3 { get; set; } = null; //`json:"ja3"`
-        public string UserAgent { get; set; } = null;  //`json:"userAgent"`
-	    public string Proxy { get; set; } = null;  //`json:"proxy"`
-        public List<Cookie> Cookies { get; set; } = null; //`json:"cookies"`
-        public string Timeout { get; set; } = null; //`json:"timeout"`
-        public string DisableRedirect { get; set; } = null; //`json:"disableRedirect"`
-        public List<string> HeaderOrder { get; set; } = null; //`json:"headerOrder"`
-	    public string OrderAsProvided { get; set; } = null; //`json:"orderAsProvided"`
+        public string Url { get; set; } = null;
+	    public string Method { get; set; } = null;
+        public Dictionary<string, string> Headers { get; set; } = null;
+	    public string Body { get; set; } = null;
+        public string Ja3 { get; set; } = null;
+        public string UserAgent { get; set; } = null;
+	    public string Proxy { get; set; } = null;
+        public List<Cookie> Cookies { get; set; } = null;
+        public string Timeout { get; set; } = null;
+        public string DisableRedirect { get; set; } = null;
+        public List<string> HeaderOrder { get; set; } = null;
+	    public string OrderAsProvided { get; set; } = null;
     }
 }
