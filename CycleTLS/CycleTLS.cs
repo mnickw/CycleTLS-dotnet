@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -14,7 +15,6 @@ using WebSocketSharp;
 
 namespace CycleTLS
 {
-    // TODO: Code SendAsync
     // TODO: Code QueueSendAsync
     // TODO: Check json parsing
     // TODO: Solve StartServer problems
@@ -30,8 +30,7 @@ namespace CycleTLS
     {
         private readonly ILogger<CycleTLSClient> _logger;
 
-        public TimeSpan DefaultTimeOut { get; private set; }
-
+        public TimeSpan DefaultTimeOut { get; set; } = TimeSpan.FromSeconds(100);
 
         private WebSocket WebSocketClient { get; set; } = null;
         private Process GoServer { get; set; } = null;
@@ -47,10 +46,24 @@ namespace CycleTLS
         private ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>> SentRequests { get; set; }
             = new ConcurrentDictionary<string, TaskCompletionSource<CycleTLSResponse>>();
 
+        private object _lockRequestCount = new object();
+        private int RequestCount { get; set; } = 0;
+
         public CycleTLSRequestOptions DefaultRequestOptions { get; } = new CycleTLSRequestOptions()
         {
             Ja3 = "771,4865-4867-4866-49195-49199-52393-52392-49196-49200-49162-49161-49171-49172-51-57-47-53-10,0-23-65281-10-11-35-16-5-51-43-13-45-28-21,29-23-24-25-256-257,0",
-            UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36"
+            UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36",
+
+            Body = "",
+            Cookies = new List<Cookie>(),
+            DisableRedirect = "",
+            HeaderOrder = new List<string>(),
+            Headers = new Dictionary<string, string>(),
+            Method = "",
+            OrderAsProvided = "",
+            Proxy = "",
+            Timeout = "",
+            URL = ""
         };
 
         public CycleTLSClient(ILogger<CycleTLSClient> logger)
@@ -59,16 +72,16 @@ namespace CycleTLS
         }
 
         /// <summary>
-        /// Creates and runs server with source CycleTLS library and WebSocket client
+        /// Creates and runs server with source CycleTLS library and WebSocket client.
         /// </summary>
-        /// <param name="port"></param>
-        /// <param name="debug"></param>
-        /// <exception cref="InvalidOperationException">Server already initialized</exception>
-        public void InitializeServerAndClient(int port = 9119, bool debug = false)
+        /// <param name="port">Port used by server.</param>
+        /// <exception cref="InvalidOperationException">Server already initialized.</exception>
+        /// <exception cref="PlatformNotSupportedException">Not supported platform.</exception>
+        public void InitializeServerAndClient(int port = 9119)
         {
             if (GoServer != null || DoesServerAlreadyRun(port))
             {
-                throw new InvalidOperationException("Server already initialized");
+                throw new InvalidOperationException("Server already initialized.");
             }
 
             string executableFilename = "";
@@ -78,13 +91,13 @@ namespace CycleTLS
             }
             catch (PlatformNotSupportedException)
             {
-                _logger.LogError("Operating system not supported");
+                _logger.LogError("Operating system not supported.");
                 throw;
             }
 
-            StartServer(debug, executableFilename, port);
+            StartServer(executableFilename, port);
 
-            StartClient(port, debug);
+            StartClient(port);
         }
 
         private bool DoesServerAlreadyRun(int port)
@@ -125,10 +138,10 @@ namespace CycleTLS
             {
                 return "index-mac";
             }
-            throw new PlatformNotSupportedException();
+            throw new PlatformNotSupportedException("Not supported platform.");
         }
 
-        private void StartServer(bool debug, string filename, int port)
+        private void StartServer(string filename, int port)
         {
             // TODO:StartServer: solve problem with directories
             var pi = new ProcessStartInfo(filename);
@@ -151,18 +164,18 @@ namespace CycleTLS
                 else
                 {
                     // TODO:StartServer: check source js code here
-                    _logger.LogError($"Go server received error data (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
+                    _logger.LogError($"Server received error data (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
                         $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
                     // TODO:StartServer: check that this will work
                     GoServer.Kill();
                     // TODO:StartServer: Dispose?
-                    StartServer(debug, filename, port);
+                    StartServer(filename, port);
                 }
             };
             GoServer.Start();
         }
 
-        private void StartClient(int port, bool debug)
+        private void StartClient(int port)
         {
             var ws = new WebSocket("ws://localhost:" + port);
 
@@ -181,12 +194,12 @@ namespace CycleTLS
 
                 foreach (var requestPair in SentRequests)
                 {
-                    requestPair.Value.TrySetException(ea.Exception);
+                    requestPair.Value.TrySetException(new Exception("Error in WebSocket connection.", ea.Exception));
                 }
 
                 SentRequests.Clear();
 
-                Task.Delay(100).ContinueWith((t) => StartClient(port, debug));
+                Task.Delay(100).ContinueWith((t) => StartClient(port));
             };
 
             ws.Connect();
@@ -197,10 +210,9 @@ namespace CycleTLS
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="httpMethod"></param>
-        /// <param name="url"></param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
+        /// <param name="httpMethod">The HTTP method.</param>
+        /// <param name="url">A string that represents the request Url.</param>
+        /// <returns>The task object representing the asynchronous operation.</returns>
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url)
         {
             return await SendAsync(httpMethod, url, DefaultTimeOut);
@@ -212,7 +224,6 @@ namespace CycleTLS
         /// <param name="httpMethod"></param>
         /// <param name="url"></param>
         /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(HttpMethod httpMethod, string url, TimeSpan timeout)
         {
             return await SendAsync(new CycleTLSRequestOptions()
@@ -228,7 +239,6 @@ namespace CycleTLS
         /// <param name="httpMethod"></param>
         /// <param name="url"></param>
         /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
         public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
         {
             return await SendAsync(cycleTLSRequestOptions, DefaultTimeOut);
@@ -239,24 +249,38 @@ namespace CycleTLS
         /// </summary>
         /// <param name="cycleTLSRequestOptions"></param>
         /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
         public Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions, TimeSpan timeout)
         {
             if (WebSocketClient == null)
             {
-                throw new InvalidOperationException("WebSocket client is not initialized");
+                throw new InvalidOperationException("WebSocket client is not initialized.");
             }
 
-            // TODO:SendAsync: options + DefaultOptions
+            // There's no records in netstandard2.0, so here's immutable copy of options
+            var optionsCopy = new CycleTLSRequestOptions();
+            foreach (var propertyInfo in typeof(CycleTLSRequestOptions).GetProperties())
+            {
+                object defaultOption = propertyInfo.GetValue(DefaultRequestOptions);
+                object customOption = propertyInfo.GetValue(cycleTLSRequestOptions);
+                if (customOption == null)
+                    propertyInfo.SetValue(optionsCopy, defaultOption);
+                else
+                    propertyInfo.SetValue(optionsCopy, customOption);
+            }
+
+            int requestIndex;
+            lock(_lockRequestCount)
+                requestIndex = ++RequestCount;
+
             var jsonRequestData = JsonSerializer.Serialize(new CycleTLSRequest()
             {
-                RequestId = "", // TODO:SendAsync: generate requestId
+                RequestId = $"{requestIndex}:{DateTime.Now}:{cycleTLSRequestOptions.URL}",
                 Options = cycleTLSRequestOptions
             });
 
             TaskCompletionSource<CycleTLSResponse> tcs = new TaskCompletionSource<CycleTLSResponse>();
             var cancelSource = new CancellationTokenSource(timeout);
-            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"After {timeout.Seconds} seconds - no response")));
+            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"No response after {timeout.Seconds} seconds.")));
 
             lock (_lockQueue)
             {
@@ -273,34 +297,36 @@ namespace CycleTLS
     
         private async Task QueueSendAsync()
         {
-            //if (WebSocketClient == null)
-            //{
-            //    throw new InvalidOperationException("For some reason WebSocket client is not initialized. You should not see this exception");
-            //}
+            if (WebSocketClient == null)
+            {
+                throw new InvalidOperationException("For some reason WebSocket client is not initialized. You should not see this exception");
+            }
 
-            //// Wait max 1500 milliseconds while server or client restarts
-            //int attempts = 0;
-            //while (!WebSocketClient.IsAlive && attempts < 15)
-            //{
-            //    await Task.Delay(100);
-            //    attempts++;
-            //}
+            // Wait max 5000 milliseconds while server or client restarts
+            int attempts = 0;
+            int maxAttempts = 50;
+            int delay = 100;
+            while (!WebSocketClient.IsAlive && attempts < 50)
+            {
+                await Task.Delay(delay);
+                attempts++;
+            }
 
-            //if (!WebSocketClient.IsAlive)
-            //{
-            //    // return error
-            //}
+            if (!WebSocketClient.IsAlive)
+            {
+                lock (_lockQueue)
+                {
+                    while (RequstQueue.Any())
+                    {
+                        RequstQueue.Dequeue().RequestTCS
+                            .TrySetException(new Exception($"WebSocket connection was not established after {maxAttempts * delay} milliseconds."));
+                    }
+                    isQueueSendRunning = false;
+                    return;
+                }
+            }
 
-            //string requestJson;
-            //TaskCompletionSource<CycleTLSResponse> requestTcs;
-            //lock (_lockQueue)
-            //{
-            //    (requestJson, requestTcs) = RequstQueue.Dequeue();
-            //}
-
-            //ConcurrentQueue<string> q = new ConcurrentQueue<string>();
-            //q.
-            //WebSocketClient.SendAsync(requestJson, (isResponded))
+            // todo
         }
     }
 
@@ -320,17 +346,17 @@ namespace CycleTLS
 
     public class CycleTLSRequestOptions
     {
-        public string URL { get; set; } = ""; //`json:"url"`
-	    public string Method { get; set; } = ""; //`json:"method"`
-        public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>(); //`json:"headers"`
-	    public string Body { get; set; } = ""; //`json:"body"`
-        public string Ja3 { get; set; } = ""; //`json:"ja3"`
-        public string UserAgent { get; set; } = "";  //`json:"userAgent"`
-	    public string Proxy { get; set; } = "";  //`json:"proxy"`
-        public List<Cookie> Cookies { get; set; } = new List<Cookie>(); //`json:"cookies"`
-        public string Timeout { get; set; } = ""; //`json:"timeout"`
-        public string DisableRedirect { get; set; } = ""; //`json:"disableRedirect"`
-        public List<string> HeaderOrder { get; set; } = new List<string>(); //`json:"headerOrder"`
-	    public string OrderAsProvided { get; set; } = ""; //`json:"orderAsProvided"`
+        public string URL { get; set; } = null; //`json:"url"`
+	    public string Method { get; set; } = null; //`json:"method"`
+        public Dictionary<string, string> Headers { get; set; } = null; //`json:"headers"`
+	    public string Body { get; set; } = null; //`json:"body"`
+        public string Ja3 { get; set; } = null; //`json:"ja3"`
+        public string UserAgent { get; set; } = null;  //`json:"userAgent"`
+	    public string Proxy { get; set; } = null;  //`json:"proxy"`
+        public List<Cookie> Cookies { get; set; } = null; //`json:"cookies"`
+        public string Timeout { get; set; } = null; //`json:"timeout"`
+        public string DisableRedirect { get; set; } = null; //`json:"disableRedirect"`
+        public List<string> HeaderOrder { get; set; } = null; //`json:"headerOrder"`
+	    public string OrderAsProvided { get; set; } = null; //`json:"orderAsProvided"`
     }
 }
