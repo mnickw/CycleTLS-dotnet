@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,13 +7,15 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using WebSocketSharp;
 using static System.Net.WebRequestMethods;
 
 namespace CycleTLS
 {
-    // TODO: ConfigureAwait
+    // TODO: logs
     // TODO: Ask why websockets, not just usual http
     public class CycleTLSClient
     {
@@ -34,38 +37,18 @@ namespace CycleTLS
         }
 
         /// <summary>
-        /// Creates and runs server with source CycleTLS library
+        /// Creates and runs server with source CycleTLS library and WebSocket client
         /// </summary>
         /// <param name="port"></param>
         /// <param name="debug"></param>
-        public void InitializeServer(int port = 9119, bool debug = false)
+        /// <exception cref="InvalidOperationException">Server already initialized</exception>
+        public void InitializeServerAndClient(int port = 9119, bool debug = false)
         {
-            if (IsPortAvailable(port))
+            if (GoServer != null || DoesServerAlreadyRun(port))
             {
-                SpawnServer(port, debug);
-                return;
+                throw new InvalidOperationException("Server already initialized");
             }
 
-            CreateClient(port, debug);
-        }
-
-        private bool IsPortAvailable(int port)
-        {
-            IPAddress ipAddress = Dns.GetHostEntry("localhost").AddressList[0];
-            try
-            {
-                TcpListener tcpListener = new TcpListener(ipAddress, port);
-                tcpListener.Start();
-            }
-            catch
-            {
-                return false;
-            }
-            return true;
-        }
-
-        private void SpawnServer(int port, bool debug)
-        {
             string executableFilename = "";
             try
             {
@@ -77,9 +60,25 @@ namespace CycleTLS
                 throw;
             }
 
-            HandleSpawn(debug, executableFilename, port);
+            StartServer(debug, executableFilename, port);
 
-            CreateClient(port, debug);
+            StartClient(port, debug);
+        }
+
+        private bool DoesServerAlreadyRun(int port)
+        {
+            IPAddress ipAddress = Dns.GetHostEntry("localhost").AddressList[0];
+            try
+            {
+                TcpListener tcpListener = new TcpListener(ipAddress, port);
+                tcpListener.Start();
+                tcpListener.Stop();
+            }
+            catch
+            {
+                return true;
+            }
+            return false;
         }
 
         private static string GetExecutableFilename()
@@ -99,7 +98,6 @@ namespace CycleTLS
                     return "index-arm64";
                 }
                 return "index";
-
             }
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
@@ -108,7 +106,7 @@ namespace CycleTLS
             throw new PlatformNotSupportedException();
         }
 
-        private void HandleSpawn(bool debug, string filename, int port)
+        private void StartServer(bool debug, string filename, int port)
         {
             // TODO: solve problem with directories
             var pi = new ProcessStartInfo(filename);
@@ -116,9 +114,9 @@ namespace CycleTLS
             pi.UseShellExecute = true;
             pi.WindowStyle = ProcessWindowStyle.Hidden;
 
-            var child = new Process();
-            child.StartInfo = pi;
-            child.ErrorDataReceived += async (_, ea) =>
+            GoServer = new Process();
+            GoServer.StartInfo = pi;
+            GoServer.ErrorDataReceived += (_, ea) =>
             {
                 if (ea.Data.Contains("Request_Id_On_The_Left"))
                 {
@@ -134,37 +132,27 @@ namespace CycleTLS
                     _logger.LogError($"Error from CycleTLSClient (please open an issue https://github.com/Danny-Dasilva/CycleTLS/issues/new/choose " +
                         $"or https://github.com/mnickw/CycleTLS-dotnet/issues): {ea.Data}");
                     // TODO: check that this will work
-                    child.Kill();
-                    HandleSpawn(debug, filename, port);
+                    GoServer.Kill();
+                    // TODO: Dispose
+                    StartServer(debug, filename, port);
                 }
             };
+            GoServer.Start();
         }
 
-        private void CreateClient(int port, bool debug)
+        private void StartClient(int port, bool debug)
         {
             var ws = new WebSocket("ws://localhost:" + port);
 
-            ws.OnOpen += (_, ea) =>
-            {
-                WebSocketClient = ws;
-            };
-
-            ws.OnMessage += (_, ea) =>
-            {
-                var message = ea.Data;
-                //parse json
-                //add response to parallelDictionary requestId -> response
-            };
-
             ws.OnError += (_, ea) =>
             {
-                // TODO: check if no deadlock here
-                // TODO: Dispose
                 ws.Close();
-                Task.Delay(100).ContinueWith((t) => CreateClient(port, debug));
+                Task.Delay(100).ContinueWith((t) => StartClient(port, debug));
             };
 
             ws.Connect();
+
+            WebSocketClient = ws;
         }
 
         /// <summary>
@@ -188,6 +176,76 @@ namespace CycleTLS
         public async Task<CycleTLSResponse> SendAsync(CycleTLSRequestOptions cycleTLSRequestOptions)
         {
             // TODO: Simple cookies
+
+            if (GoServer == null)
+            {
+                throw new InvalidOperationException("Server with source CycleTLS library is not initialized");
+            }
+
+            if (WebSocketClient == null)
+            {
+                throw new InvalidOperationException("WebSocket client is not initialized");
+            }
+
+            // options + DefaultOptions
+            var jsonRequestData = JsonSerializer.Serialize(new CycleTLSRequest()
+            {
+                RequestId = "", // generate requestId
+                Options = cycleTLSRequestOptions
+            });
+
+    //        lastRequestID = requestId
+
+    //if (this.server)
+    //        {
+    //            this.server.send(JSON.stringify({ requestId, options }));
+    //        }
+    //        else
+    //        {
+    //            if (this.queue == null)
+    //            {
+    //                this.queue = [];
+    //            }
+    //            this.queue.push(JSON.stringify({ requestId, options }))
+
+    //  if (this.queueId == null)
+    //            {
+    //                this.queueId = setInterval(() => {
+    //                    if (this.server)
+    //                    {
+    //                        for (let request of this.queue)
+    //                        {
+    //                            this.server.send(request);
+    //                        }
+    //                        this.queue = [];
+    //                        clearInterval(this.queueId);
+    //                        this.queueId = null
+    //                    }
+    //                }, 100)
+    //  }
+    //        }
+
+            //instance.once(requestId, (response) => {
+            //if (response.error) return rejectRequest(response.error);
+            //try
+            //{
+            //    //parse json responses
+            //    response.Body = JSON.parse(response.Body);
+            //    //override console.log full repl to display full body
+            //    response.Body[util.inspect.custom] = function(){ return JSON.stringify(this, undefined, 2); }
+            //}
+            //catch (e) { }
+
+            //const { Status: status, Body: body, Headers: headers } = response;
+
+            //if (headers["Set-Cookie"])
+            //    headers["Set-Cookie"] = headers["Set-Cookie"].split("/,/");
+            //resolveRequest({
+            //    status,
+            //    body,
+            //    headers,
+            //  });
+            //});
 
             throw new NotImplementedException();
         }
