@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using WebSocketSharp;
+using WebSocketSharper;
 
 namespace CycleTLS
 {
@@ -53,13 +53,13 @@ namespace CycleTLS
 
             Body = "",
             Cookies = new List<Cookie>(),
-            DisableRedirect = "",
+            DisableRedirect = null,
             HeaderOrder = new List<string>(),
             Headers = new Dictionary<string, string>(),
             Method = "",
-            OrderAsProvided = "",
+            OrderAsProvided = null,
             Proxy = "",
-            Timeout = "",
+            Timeout = null,
             Url = ""
         };
 
@@ -177,7 +177,7 @@ namespace CycleTLS
 
         private void StartClient(int port)
         {
-            var ws = new WebSocket("ws://localhost:" + port);
+            var ws = new WebSocket(_logger, "ws://localhost:" + port, false);
 
             ws.OnMessage += (_, ea) =>
             {
@@ -396,9 +396,9 @@ namespace CycleTLS
         public string UserAgent { get; set; } = null;
 	    public string Proxy { get; set; } = null;
         public List<Cookie> Cookies { get; set; } = null;
-        public string Timeout { get; set; } = null;
-        public string DisableRedirect { get; set; } = null;
+        public int? Timeout { get; set; } = null;
+        public bool? DisableRedirect { get; set; } = null;
         public List<string> HeaderOrder { get; set; } = null;
-	    public string OrderAsProvided { get; set; } = null;
+	    public bool? OrderAsProvided { get; set; } = null;
     }
 }
