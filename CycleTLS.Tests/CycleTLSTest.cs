@@ -13,6 +13,7 @@ namespace CycleTLS.Tests
 
             client.InitializeServerAndClient();
 
+            // To find your ja3 you can use https://kawayiyi.com/tls or https://tls.peet.ws/
             client.DefaultRequestOptions.Ja3 = "";
             client.DefaultRequestOptions.UserAgent = "";
 

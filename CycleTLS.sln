@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CycleTLS", "CycleTLS\CycleT
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CycleTLS.Tests", "CycleTLS.Tests\CycleTLS.Tests.csproj", "{0FA6484A-9468-42B9-8041-4A857B521538}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CycleTLS.ConsoleExample", "CycleTLS.ConsoleExample\CycleTLS.ConsoleExample.csproj", "{C252C909-4368-4B55-8B0A-329D1B38EF43}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{0FA6484A-9468-42B9-8041-4A857B521538}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0FA6484A-9468-42B9-8041-4A857B521538}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0FA6484A-9468-42B9-8041-4A857B521538}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C252C909-4368-4B55-8B0A-329D1B38EF43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C252C909-4368-4B55-8B0A-329D1B38EF43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C252C909-4368-4B55-8B0A-329D1B38EF43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C252C909-4368-4B55-8B0A-329D1B38EF43}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
