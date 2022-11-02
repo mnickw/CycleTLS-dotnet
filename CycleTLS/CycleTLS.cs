@@ -15,12 +15,13 @@ using WebSocketSharper;
 
 namespace CycleTLS
 {
-    // TODO: Debug StartServer, StartClient and everything else
+    // TODO: reuse server
     // TODO: Dispose
     // TODO: logs
 
     // TODO: Documentation
     // TODO: explain in comments why do we need queue and dictionary
+    // TODO: Tests
     // TODO: Simple cookies and headers
     // TODO: Ask why websockets, not just usual http
     public class CycleTLSClient
@@ -190,7 +191,7 @@ namespace CycleTLS
 
             ws.OnError += (_, ea) =>
             {
-                ws.Close(); // TODO:StartClient: Debug here for no errors
+                ws.Close();
 
                 foreach (var requestPair in SentRequests)
                 {
