@@ -142,7 +142,7 @@ namespace CycleTLS
         {
             var pi = new ProcessStartInfo(filename);
             pi.EnvironmentVariables.Add("WS_PORT", port.ToString());
-            pi.UseShellExecute = true;
+            //pi.UseShellExecute = true;
             pi.WindowStyle = ProcessWindowStyle.Hidden;
 
             GoServer = new Process();
@@ -258,7 +258,7 @@ namespace CycleTLS
 
             TaskCompletionSource<CycleTLSResponse> tcs = new TaskCompletionSource<CycleTLSResponse>();
             var cancelSource = new CancellationTokenSource(timeout);
-            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"No response after {timeout.Seconds} seconds.")));
+            cancelSource.Token.Register(() => tcs.TrySetException(new TimeoutException($"No response after {timeout.TotalSeconds} seconds.")));
 
             var request = CreateRequest(cycleTLSRequestOptions);
 
@@ -268,7 +268,7 @@ namespace CycleTLS
                 if (!isQueueSendRunning)
                 {
                     isQueueSendRunning = true;
-                    QueueSendAsync();
+                    Task.Run(() => QueueSendAsync());
                 }
             }
 
