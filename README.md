@@ -1,12 +1,13 @@
 Project is under development
 
 # CycleTLS-dotnet
-CycleTLS client for .NET
-Client for https://github.com/Danny-Dasilva/CycleTLS to spoof TLS/JA3 fingerprints.
+.NET client for https://github.com/Danny-Dasilva/CycleTLS to spoof TLS/JA3 fingerprints.
+
 .netstandard2.0 supported
 
 # Installation
 After some time I'll release nuget package.
+
 Right now you need `npm install cycletls` in any directory and copy `dist` from `node_modules/cycletls` to directory with your solution.
 
 # Usage
