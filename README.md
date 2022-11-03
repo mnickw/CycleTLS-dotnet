@@ -54,17 +54,17 @@ Options class:
 public class CycleTLSRequestOptions
 {
     public string Url { get; set; };
-	  public string Method { get; set; };
+    public string Method { get; set; };
     public Dictionary<string, string> Headers { get; set; };
-	  public string Body { get; set; };
+    public string Body { get; set; };
     public string Ja3 { get; set; };
     public string UserAgent { get; set; };
-	  public string Proxy { get; set; };
+    public string Proxy { get; set; };
     public List<Cookie> Cookies { get; set; };
     public int? Timeout { get; set; };
     public bool? DisableRedirect { get; set; };
     public List<string> HeaderOrder { get; set; };
-	  public bool? OrderAsProvided { get; set; };
+    public bool? OrderAsProvided { get; set; };
 }
 ```
 
