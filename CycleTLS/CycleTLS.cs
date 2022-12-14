@@ -290,6 +290,11 @@ namespace CycleTLS
                     propertyInfo.SetValue(optionsCopy, customOption);
             }
 
+            foreach (var cookie in optionsCopy.Cookies.Where(c => c.Expires == default))
+            {
+                cookie.Expires = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc).ToLocalTime();
+            }
+
             int requestIndex;
             lock (_lockRequestCount)
                 requestIndex = ++RequestCount;
